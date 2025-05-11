@@ -173,3 +173,17 @@ cython_debug/
 # PyPI configuration file
 .pypirc
 /.idea
+/dataset/images/train
+/dataset/images/val
+/dataset/labels/train
+/dataset/labels/val
+/dataset/logos/combined
+/dataset/logos/independent
+/dataset/masks/train
+/dataset/masks/val
+/dataset/pure
+/dataset/sample_images_100
+/dataset/synthetic/clean
+/dataset/synthetic/images
+/dataset/synthetic/masks
+
