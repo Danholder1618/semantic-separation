@@ -1,0 +1,7 @@
+torch==2.7.0
+torchvision==0.22.0
+# torchaudio --index-url https://download.pytorch.org/whl/cu121
+pillow==10.3.0
+fastapi==0.110.2
+uvicorn[standard]==0.29.0
+numpy==2.2.5
