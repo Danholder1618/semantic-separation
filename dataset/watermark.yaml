@@ -1,0 +1,10 @@
+transparency_range: [0.2, 0.6]
+jpeg_quality: [60, 95]
+perspective: true
+output_size: 512
+background_path: "dataset/pure/*"
+logo_path: "dataset/logos/combined/*.png"
+synthetic_path: "dataset/synthetic"
+n_images: 5000
+val_split: 0.1
+seed: 42
