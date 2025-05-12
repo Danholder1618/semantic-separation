@@ -142,7 +142,7 @@ def main(opt):
             best_iou, wait = vl[1], 0
             os.makedirs("models", exist_ok=True)
             torch.save(model.state_dict(), "models/unet_base.pt")
-            print("  ✔ saved best")
+            print("saved best")
         else:
             wait += 1
             if wait >= 8:
