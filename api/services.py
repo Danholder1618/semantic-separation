@@ -10,8 +10,10 @@ IMG_SZ = cfg["output_size"]
 
 def apply_artifact(img: np.ndarray, transparency: float = 0.4):
     logo = rand_logo(logo_paths, IMG_SZ)
-    dirty_init, mask = paste_logo(img, logo)
-    dirty = cv2.addWeighted(img, 1 - transparency, dirty_init, transparency, 0)
+
+    dirty, mask = paste_logo(img, logo)
+
+    dirty = cv2.addWeighted(img, 1 - transparency, dirty, transparency, 0)
     return dirty, mask
 
 def preprocess(img_bytes: bytes):
