@@ -187,3 +187,4 @@ cython_debug/
 /dataset/synthetic/images
 /dataset/synthetic/masks
 
+/models
