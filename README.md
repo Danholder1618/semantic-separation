@@ -20,6 +20,9 @@ And we get:
 * python train_base.py 
 * python train_improved.py
 
+# Statistics
+* python plot_metrics.py <path_to_statistics_in_same_dir>.csv
+
 # API:
 * docker-compose up -d --build
 * Swagger UI: http://127.0.0.1:8000/docs
