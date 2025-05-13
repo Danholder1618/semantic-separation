@@ -188,3 +188,4 @@ cython_debug/
 /dataset/synthetic/masks
 
 /models
+/runs
