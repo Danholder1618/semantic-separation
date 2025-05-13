@@ -3,4 +3,4 @@ pillow==10.3.0
 tqdm==4.66.4
 albumentations==2.0.6
 numpy==2.2.5
-scikit-image 0.25.2
+scikit-image==0.25.2

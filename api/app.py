@@ -1,51 +1,114 @@
-import torch
+import io
 import cv2
-import base64
 import numpy as np
-from fastapi import FastAPI, UploadFile, File
-from model.unet import UNet
-from api.services import random_logo, put_logo, b64, prep
+import torch
+from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi.responses import StreamingResponse
+from PIL import Image
 from pathlib import Path
+from model.unet import UNet
+from api.services import apply_artifact, preprocess, IMG_SZ, encode_image
 
 
-IMG_SZ = 512
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-MODELS = {
-    "base":     UNet(out_clean=False).to(DEVICE),
-    "improved": UNet(out_clean=True, use_ag=True).to(DEVICE)
-}
-MODELS["base"].load_state_dict(torch.load("models/unet_base.pt", map_location=DEVICE))
-MODELS["improved"].load_state_dict(torch.load("models/unet_improved.pt", map_location=DEVICE))
-for m in MODELS.values():
-    m.eval()
+
+base_model = UNet(out_clean=False, use_ag=False).to(DEVICE)
+base_path  = Path("models/unet_base.pt")
+if base_path.exists():
+    base_model.load_state_dict(torch.load(base_path, map_location=DEVICE))
+    base_model.eval()
+else:
+    print(f"[WARN] Base model not found: {base_path}")
+
+imp_model = UNet(out_clean=True, use_ag=True).to(DEVICE)
+imp_path  = Path("models/unet_improved.pt")
+if imp_path.exists():
+    imp_model.load_state_dict(torch.load(imp_path, map_location=DEVICE))
+    imp_model.eval()
+else:
+    print(f"[WARN] Improved model not found: {imp_path}")
+
+app = FastAPI(
+    title="Semantic Separation API",
+    description="API for image processing and artifact separation",
+    version="1.0.0",
+    docs_url="/docs",
+    redoc_url="/redoc"
+)
 
 
-app = FastAPI(title="Semantic-Separation API (PyTorch)")
+@app.post("/apply_artefact")
+async def apply_artefact_endpoint(file: UploadFile = File(...), transparency: float = 0.4):
+    """Возвращает изображение с артефактами"""
+    img_bytes = await file.read()
+    orig, _, _ = preprocess(img_bytes)
+    orig_rs = cv2.resize(orig, (IMG_SZ, IMG_SZ))
+    dirty, _ = apply_artifact(orig_rs, transparency)
+    return StreamingResponse(encode_image(dirty), media_type="image/png")
 
 
-@app.post("/apply_watermark")
-async def apply_watermark(src: UploadFile = File(...), transparency: float = 0.4):
-    orig = cv2.imdecode(np.frombuffer(await src.read(), np.uint8), cv2.IMREAD_COLOR)
-    wm, mask = put_logo(orig, random_logo(), transparency)
-    return {"watermarked_base64": b64(wm, ".jpg"),
-            "mask_base64":        b64(mask, ".png")}
+@app.post("/separate_base_mask")
+async def separate_base_mask_endpoint(file: UploadFile = File(...)):
+    """Возвращает только маску"""
+    if not base_path.exists():
+        raise HTTPException(404, "Base model not available")
 
-@app.post("/separate/{version}")
-async def separate(version: str, file: UploadFile = File(...)):
-    if version not in MODELS:
-        return {"error": "version must be 'base' or 'improved'"}
-    orig, inp, (h,w) = prep(await file.read())
+    img_bytes = await file.read()
+    _, inp_np, (H, W) = preprocess(img_bytes)
+    inp = torch.from_numpy(inp_np.transpose(0, 3, 1, 2)).float().to(DEVICE)
+
     with torch.no_grad():
-        logits, clean = MODELS[version](inp)
-    mask = (torch.sigmoid(logits)[0,0].cpu().numpy()>0.5).astype(np.uint8)
-    mask = cv2.resize(mask, (w, h), cv2.INTER_NEAREST)
-    if clean is not None:
-        clean = (clean[0].cpu().numpy().transpose(1,2,0)*255).astype(np.uint8)
-        clean = cv2.resize(clean,(w,h),cv2.INTER_LINEAR)
-    watermark = cv2.bitwise_and(orig, orig, mask=mask*255)
-    return {
-        "mask":       b64(mask*255),
-        "watermark":  b64(watermark),
-        "clean":      b64(clean) if clean is not None else None
-    }
+        logits, _ = base_model(inp)
+
+    mask_np = (torch.sigmoid(logits)[0, 0].cpu().numpy() > 0.5).astype(np.uint8) * 255
+    mask_pil = Image.fromarray(mask_np).resize((W, H), Image.NEAREST)
+
+    mask_buf = io.BytesIO()
+    mask_pil.save(mask_buf, format="PNG")
+    mask_buf.seek(0)
+
+    return StreamingResponse(mask_buf, media_type="image/png")
+
+
+@app.post("/separate/extract")
+async def extract_endpoint(file: UploadFile = File(...)):
+    """Возвращает извлеченное наложенное изображение"""
+    if not imp_path.exists():
+        raise HTTPException(404, "Improved model not available")
+
+    img_bytes = await file.read()
+    orig, inp_np, (H, W) = preprocess(img_bytes)
+    inp = torch.from_numpy(inp_np.transpose(0, 3, 1, 2)).float().to(DEVICE)
+
+    with torch.no_grad():
+        logits, _ = imp_model(inp)
+
+    mask_np = (torch.sigmoid(logits)[0, 0].cpu().numpy() > 0.5).astype(np.uint8)
+    mask_img = (mask_np * 255).astype(np.uint8)
+    extracted = cv2.bitwise_and(orig, orig, mask=mask_img)
+
+    return StreamingResponse(encode_image(extracted), media_type="image/png")
+
+
+@app.post("/separate/clean")
+async def clean_endpoint(file: UploadFile = File(...)):
+    """Возвращает очищенное изображение"""
+    if not imp_path.exists():
+        raise HTTPException(404, "Improved model not available")
+
+    img_bytes = await file.read()
+    _, inp_np, (H, W) = preprocess(img_bytes)
+    inp = torch.from_numpy(inp_np.transpose(0, 3, 1, 2)).float().to(DEVICE)
+
+    with torch.no_grad():
+        _, clean_pred = imp_model(inp)
+
+    clean_np = (clean_pred[0].cpu().numpy().transpose(1, 2, 0) * 255).astype(np.uint8)
+    clean_pil = Image.fromarray(clean_np).resize((W, H), Image.BILINEAR)
+
+    clean_buf = io.BytesIO()
+    clean_pil.save(clean_buf, format="PNG")
+    clean_buf.seek(0)
+
+    return StreamingResponse(clean_buf, media_type="image/png")
