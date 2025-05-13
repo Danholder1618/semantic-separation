@@ -14,6 +14,22 @@ def load_path(path):
         return yaml.safe_load(f)
 
 
+def augment_logo(logo):
+    color_aug = Compose([
+        RandomGamma(gamma_limit=(80, 120), p=0.5),
+        HueSaturationValue(hue_shift_limit=20, sat_shift_limit=30, val_shift_limit=20, p=0.7),
+        RGBShift(r_shift_limit=30, g_shift_limit=30, b_shift_limit=30, p=0.5),
+        RandomBrightnessContrast(0.2, 0.2, p=0.5),
+        Blur(3, p=0.3),
+        Perspective(scale=(0.05, 0.12), p=0.5),
+        ImageCompression(quality_lower=70, quality_upper=100, p=1.0)
+    ])
+    logo_rgb = logo[..., :3]
+    logo_rgb_aug = color_aug(image=logo_rgb)['image']
+    logo[..., :3] = logo_rgb_aug
+    return logo
+
+
 def rand_logo(logo_paths, out_size):
     lp = random.choice(logo_paths)
     logo = cv2.imread(lp, cv2.IMREAD_UNCHANGED)
@@ -21,15 +37,7 @@ def rand_logo(logo_paths, out_size):
         logo = cv2.cvtColor(logo, cv2.COLOR_BGR2BGRA)
         logo[..., 3] = 255
 
-    color_aug = Compose([
-        RandomGamma(gamma_limit=(80, 120), p=0.5),
-        HueSaturationValue(hue_shift_limit=20, sat_shift_limit=30, val_shift_limit=20, p=0.7),
-        RGBShift(r_shift_limit=30, g_shift_limit=30, b_shift_limit=30, p=0.5),
-    ])
-
-    logo_rgb = logo[..., :3]
-    logo_rgb_aug = color_aug(image=logo_rgb)["image"]
-    logo[..., :3] = logo_rgb_aug
+    logo = augment_logo(logo)
 
     scale = random.uniform(0.2, 0.5)
     nh = int(out_size * scale)
@@ -76,13 +84,9 @@ def main(cfg_path):
         (root / "masks" / split).mkdir(parents=True, exist_ok=True)
         (root / "clean" / split).mkdir(parents=True, exist_ok=True)
 
-    aug = Compose([
+    resize_aug = Compose([
         Resize(cfg["output_size"], cfg["output_size"]),
-        PadIfNeeded(cfg["output_size"], cfg["output_size"]),
-        RandomBrightnessContrast(0.2, 0.2, p=0.5),
-        Blur(3, p=0.3),
-        Perspective(scale=(0.05, 0.12), p=float(cfg["perspective"])),
-        ImageCompression(quality_lower=cfg["jpeg_quality"][0], quality_upper=cfg["jpeg_quality"][1], p=1.0),
+        PadIfNeeded(cfg["output_size"], cfg["output_size"])
     ], additional_targets={"mask": "mask"})
 
     for i in tqdm(range(n_images), desc="Generating synthetic data"):
@@ -94,7 +98,7 @@ def main(cfg_path):
         t = random.uniform(*cfg["transparency_range"])
         dirty = cv2.addWeighted(bg, 1 - t, dirty, t, 0)
 
-        data = aug(image=dirty, mask=mask)
+        data = resize_aug(image=dirty, mask=mask)
         dirty_aug, mask_aug = data["image"], data["mask"]
         clean = cv2.resize(bg, (cfg["output_size"], cfg["output_size"]))
 
