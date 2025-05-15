@@ -34,9 +34,7 @@ class AttentionGate(nn.Module):
 
     def forward(self, x, g):
         a = F.relu(self.w_x(x) + self.w_g(g))
-        a = self.psi(a)
-        return x * a
-
+        return x * self.psi(a)
 
 class Up(nn.Module):
     def __init__(self, in_c, out_c, bilinear=True, use_ag: bool = False):
@@ -45,9 +43,8 @@ class Up(nn.Module):
         if bilinear:
             self.up = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True)
         else:
-            self.up = nn.ConvTranspose2d(in_c // 2, in_c //2, 2, 2)
-
-        self.att: Optional[nn.Module] = AttentionGate(out_c) if use_ag else None
+            self.up = nn.ConvTranspose2d(in_c//2, in_c//2, 2, 2)
+        self.att: Optional[nn.Module] = AttentionGate(in_c//2) if use_ag else None
         self.conv = DoubleConv(in_c, out_c)
 
     def forward(self, x1, x2):
@@ -62,31 +59,27 @@ class Up(nn.Module):
 
 
 class UNet(nn.Module):
-    def __init__(self, n_channels: int = 3,
-                 out_clean: bool = False,
-                 use_ag: bool = False):
+    def __init__(self, n_channels=3, out_clean=False, use_ag=False):
         super().__init__()
         self.out_clean = out_clean
 
         self.inc = DoubleConv(n_channels, 64)
-        self.d1, self.d2 = Down(64,128), Down(128,256)
-        self.d3, self.d4 = Down(256,512), Down(512,512)
-
+        self.d1 = Down(64,128); self.d2 = Down(128,256)
+        self.d3 = Down(256,512); self.d4 = Down(512,512)
         self.u1 = Up(1024,256,use_ag=use_ag)
         self.u2 = Up(512,128,use_ag=use_ag)
         self.u3 = Up(256,64,use_ag=use_ag)
         self.u4 = Up(128,64,use_ag=use_ag)
-
-        self.mask_head = nn.Conv2d(64, 1, 1)
-        if self.out_clean:
-            self.clean_head = nn.Sequential(nn.Conv2d(64,3,1), nn.Tanh())
-
+        self.mask_head = nn.Conv2d(64,1,1)
+        if out_clean:
+            self.clean_head = nn.Conv2d(64, 3, 1)
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
                 nn.init.kaiming_normal_(m.weight, nonlinearity='relu')
 
-    def forward(self, x):
-        x1 = self.inc(x)
+    def forward(self, inp):
+        orig = inp
+        x1 = self.inc(inp)
         x2 = self.d1(x1)
         x3 = self.d2(x2)
         x4 = self.d3(x3)
@@ -96,9 +89,9 @@ class UNet(nn.Module):
         x = self.u2(x,x3)
         x = self.u3(x,x2)
         x = self.u4(x,x1)
-
-        mask_logos = self.mask_head(x)
+        mask_logits = self.mask_head(x)
         if self.out_clean:
-            clean = (self.clean_head(x)+1)/2
-            return mask_logos, clean
-        return mask_logos, None
+            residue = self.clean_head(x)
+            clean = orig + residue
+            return mask_logits, clean
+        return mask_logits, None
