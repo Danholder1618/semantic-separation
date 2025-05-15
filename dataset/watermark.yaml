@@ -5,6 +5,6 @@ output_size: 512
 background_path: "dataset/pure/*"
 logo_path: "dataset/logos/combined/*.png"
 synthetic_path: "dataset/synthetic"
-n_images: 5000
-val_split: 0.1
+n_images: 12000
+val_split: 0.2
 seed: 42

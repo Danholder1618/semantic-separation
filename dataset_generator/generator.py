@@ -1,6 +1,10 @@
 from pathlib import Path
 from tqdm import tqdm
-from albumentations import (Compose, Resize, PadIfNeeded, RandomBrightnessContrast, Perspective, ImageCompression, Blur, RandomGamma, HueSaturationValue, RGBShift)
+from albumentations import (
+    Compose, Resize, PadIfNeeded, RandomBrightnessContrast, Perspective,
+    ImageCompression, Blur, RandomGamma, HueSaturationValue, RGBShift,
+    ShiftScaleRotate, GaussNoise, MotionBlur, OpticalDistortion
+)
 import numpy as np
 import cv2
 import glob
@@ -22,7 +26,10 @@ def augment_logo(logo):
         RandomBrightnessContrast(0.2, 0.2, p=0.5),
         Blur(3, p=0.3),
         Perspective(scale=(0.05, 0.12), p=0.5),
-        ImageCompression(quality_lower=70, quality_upper=100, p=1.0)
+        ImageCompression(quality_lower=30, quality_upper=100, p=1.0),
+        GaussNoise(p=0.3),
+        MotionBlur(blur_limit=7, p=0.2),
+        OpticalDistortion(distort_limit=0.05, shift_limit=0.05, p=0.2)
     ])
     logo_rgb = logo[..., :3]
     logo_rgb_aug = color_aug(image=logo_rgb)['image']
@@ -55,7 +62,9 @@ def paste_logo(bg, logo):
     alpha = logo[..., 3:] / 255.0
     alpha = np.dstack([alpha] * 3)
 
-    result[top:top + lh, left:left + lw] = (alpha * logo[..., :3] + (1 - alpha) * result[top:top + lh, left:left + lw])
+    result[top:top + lh, left:left + lw] = (
+        alpha * logo[..., :3] + (1 - alpha) * result[top:top + lh, left:left + lw]
+    )
 
     mask = np.zeros((h, w), dtype=np.uint8)
     mask[top:top + lh, left:left + lw] = (logo[..., 3] > 0).astype(np.uint8) * 255
@@ -67,9 +76,10 @@ def main(cfg_path):
     random.seed(cfg["seed"])
     np.random.seed(cfg["seed"])
 
-    bg_paths = [f for f in glob.glob(cfg["background_path"]) if f.lower().endswith(('.jpg', '.jpeg', '.png'))]
+    bg_paths = [f for f in glob.glob(cfg["background_path"])
+                if f.lower().endswith(('.jpg', '.jpeg', '.png'))]
     random.shuffle(bg_paths)
-    assert bg_paths, "No images!"
+    assert bg_paths, "No background images!"
 
     logo_paths = glob.glob(cfg["logo_path"])
     random.shuffle(logo_paths)
