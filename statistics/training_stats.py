@@ -13,7 +13,6 @@ SYNTH_AG_TB_LOGDIR  = 'runs/synth_rec_ag_run'
 
 
 def load_tb_scalars(logdir, tag):
-    """Load a list of (step, value) for a given tag from TB logs."""
     ea = event_accumulator.EventAccumulator(
         logdir,
         size_guidance={
@@ -33,33 +32,33 @@ def main():
     df_synth_ag  = pd.read_csv(SYNTH_REC_AG_CSV)
 
     plt.figure(figsize=(8,5))
-    plt.plot(df_base['epoch'], df_base['val_iou'],   label='Base-Real')
-    plt.plot(df_synth['epoch'], df_synth['iou'],      label='Synth-REC')
+    plt.plot(df_base['epoch'], df_base['val_iou'],   label='Base')
+    plt.plot(df_synth['epoch'], df_synth['iou'],      label='Synth')
     plt.xlabel('Epoch')
     plt.ylabel('Validation IoU')
-    plt.title('Segmentation IoU: Base-Real vs Synth-REC')
+    plt.title('Segmentation IoU: Base vs Synth')
     plt.legend(loc='lower right')
     plt.grid(True)
     plt.savefig('mask_iou_comparison.png', dpi=200)
     plt.show()
 
     plt.figure(figsize=(8,5))
-    plt.plot(df_synth['epoch'], df_synth['psnr_c'],     label='Synth-REC')
-    plt.plot(df_synth_ag['epoch'], df_synth_ag['psnr_c'], label='Synth-REC+AG')
+    plt.plot(df_synth['epoch'], df_synth['psnr_c'],     label='Synth')
+    plt.plot(df_synth_ag['epoch'], df_synth_ag['psnr_c'], label='Synth+AG')
     plt.xlabel('Epoch')
     plt.ylabel('Validation PSNR (clean)')
-    plt.title('Restoration PSNR: Synth-REC vs Synth-REC+AG')
+    plt.title('Restoration PSNR: Synth vs Synth+AG')
     plt.legend()
     plt.grid(True)
     plt.savefig('psnr_clean_comparison.png', dpi=200)
     plt.show()
 
     plt.figure(figsize=(8,5))
-    plt.plot(df_synth['epoch'], df_synth['ssim_c'],     label='Synth-REC')
-    plt.plot(df_synth_ag['epoch'], df_synth_ag['ssim_c'], label='Synth-REC+AG')
+    plt.plot(df_synth['epoch'], df_synth['ssim_c'],     label='Synth')
+    plt.plot(df_synth_ag['epoch'], df_synth_ag['ssim_c'], label='Synth+AG')
     plt.xlabel('Epoch')
     plt.ylabel('Validation SSIM (clean)')
-    plt.title('Restoration SSIM: Synth-REC vs Synth-REC+AG')
+    plt.title('Restoration SSIM: Synth vs Synth+AG')
     plt.legend()
     plt.grid(True)
     plt.savefig('ssim_clean_comparison.png', dpi=200)
@@ -76,8 +75,8 @@ def main():
 
     if tb_base_iou is not None and tb_synth_iou is not None:
         plt.figure(figsize=(8,5))
-        plt.plot(tb_base_iou['epoch'], tb_base_iou['value'],   label='TB Base-Real IoU')
-        plt.plot(tb_synth_iou['epoch'], tb_synth_iou['value'], label='TB Synth-REC IoU')
+        plt.plot(tb_base_iou['epoch'], tb_base_iou['value'],   label='TB Base IoU')
+        plt.plot(tb_synth_iou['epoch'], tb_synth_iou['value'], label='TB Synth IoU')
         plt.xlabel('Epoch')
         plt.ylabel('IoU')
         plt.title('TB: Segmentation IoU Comparison')
@@ -88,7 +87,7 @@ def main():
 
     if tb_ag_psnr is not None:
         plt.figure(figsize=(8,5))
-        plt.plot(tb_ag_psnr['epoch'], tb_ag_psnr['value'], label='TB Synth-REC+AG PSNR_clean')
+        plt.plot(tb_ag_psnr['epoch'], tb_ag_psnr['value'], label='TB Synth+AG PSNR_clean')
         plt.xlabel('Epoch')
         plt.ylabel('PSNR (clean)')
         plt.title('TB: Restoration PSNR for AttentionGate')
@@ -98,10 +97,10 @@ def main():
         plt.show()
 
     print("\nSummary statistics:")
-    for name, df in [('Base-Real IoU', df_base['val_iou']),
-                     ('Synth-REC IoU', df_synth['iou']),
-                     ('Synth-REC PSNR', df_synth['psnr_c']),
-                     ('Synth-REC+AG PSNR', df_synth_ag['psnr_c'])]:
+    for name, df in [('Base IoU', df_base['val_iou']),
+                     ('Synth IoU', df_synth['iou']),
+                     ('Synth PSNR', df_synth['psnr_c']),
+                     ('Synth+AG PSNR', df_synth_ag['psnr_c'])]:
         print(f"{name}: max={df.max():.3f}, mean={df.mean():.3f}")
 
 if __name__ == '__main__':
