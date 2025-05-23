@@ -60,7 +60,7 @@ def composite_clean_preserve_colors(orig: np.ndarray, logits: torch.Tensor, clea
 
 # --- Endpoints ---
 
-@app.post("/apply_artefact")
+@app.post("/apply_artefact", tags=["Synth Generator"])
 async def apply_artefact_endpoint(file: UploadFile = File(...), transparency: float = 0.4):
     img_bytes = await file.read()
     orig, inp, _ = preprocess(img_bytes)
@@ -68,7 +68,7 @@ async def apply_artefact_endpoint(file: UploadFile = File(...), transparency: fl
     return StreamingResponse(encode_image(dirty), media_type="image/png")
 
 
-@app.post("/separate_base_mask")
+@app.post("/separate_base_mask", tags=["Base"])
 async def separate_base_mask(file: UploadFile = File(...)):
     if base_model is None:
         raise HTTPException(404, "Base-Real model not available")
@@ -85,7 +85,7 @@ async def separate_base_mask(file: UploadFile = File(...)):
     return StreamingResponse(buf, media_type="image/png")
 
 
-@app.post("/separate/synth_rec_mask")
+@app.post("/separate/synth_rec_mask", tags=["Synth"])
 async def synth_rec_mask(file: UploadFile = File(...)):
     if synth_rec_model is None:
         raise HTTPException(404, "Base-Synth-REC model not available")
@@ -102,7 +102,7 @@ async def synth_rec_mask(file: UploadFile = File(...)):
     return StreamingResponse(buf, media_type="image/png")
 
 
-@app.post("/separate/synth_rec_clean")
+@app.post("/separate/synth_rec_clean", tags=["Synth"])
 async def synth_rec_clean(file: UploadFile = File(...)):
     if synth_rec_model is None:
         raise HTTPException(404, "Base-Synth-REC model not available")
@@ -131,7 +131,7 @@ async def synth_rec_clean(file: UploadFile = File(...)):
     return StreamingResponse(buf, media_type="image/png")
 
 
-@app.post("/separate/synth_ag_clean")
+@app.post("/separate/synth_ag_clean", tags=["Synth AG"])
 async def synth_ag_clean(file: UploadFile = File(...), preserve_colors: bool = Query(True, description="Сохранять оригинальные цвета фона")):
     if synth_ag_model is None:
         raise HTTPException(404, "Base-Synth-REC+AG model not available")
@@ -161,41 +161,41 @@ async def synth_ag_clean(file: UploadFile = File(...), preserve_colors: bool = Q
 
 
 
-@app.post("/separate/extract")
-async def extract(file: UploadFile = File(...)):
-    if imp_model is None:
-        raise HTTPException(404, "Improved model not available")
-    img_bytes = await file.read()
-    orig, inp_np, _ = preprocess(img_bytes)
-    inp = torch.from_numpy(inp_np.transpose(0, 3, 1, 2)).float().to(DEVICE)
-    with torch.no_grad():
-        logits, _ = imp_model(inp)
-    mask = (torch.sigmoid(logits)[0, 0].cpu().numpy() > 0.5).astype(np.uint8) * 255
-    mask_img = cv2.resize(mask, (orig.shape[1], orig.shape[0]), cv2.INTER_NEAREST)
-    extracted = cv2.bitwise_and(orig, orig, mask=mask_img)
-    return StreamingResponse(encode_image(extracted), media_type="image/png")
-
-
-@app.post("/separate/clean")
-async def clean(file: UploadFile = File(...), preserve_colors: bool = Query(False, description="Сохранять оригинальные цвета фона")):
-    if imp_model is None:
-        raise HTTPException(404, "Improved model not available")
-
-    img_bytes = await file.read()
-    orig, inp_np, (H, W) = preprocess(img_bytes)
-    orig = cv2.resize(orig, (512, 512))
-    inp = torch.from_numpy(inp_np.transpose(0, 3, 1, 2)).float().to(DEVICE)
-
-    with torch.no_grad():
-        logits, clean_pred = imp_model(inp)
-
-    if preserve_colors:
-        comp_np = composite_clean_preserve_colors(orig, logits, clean_pred)
-    else:
-        comp_np = composite_clean(orig, logits, clean_pred)
-
-    buf = io.BytesIO()
-    Image.fromarray(comp_np).resize((W, H), Image.BILINEAR).save(buf, "PNG")
-    buf.seek(0)
-
-    return StreamingResponse(buf, media_type="image/png")
+# @app.post("/separate/extract")
+# async def extract(file: UploadFile = File(...)):
+#     if imp_model is None:
+#         raise HTTPException(404, "Improved model not available")
+#     img_bytes = await file.read()
+#     orig, inp_np, _ = preprocess(img_bytes)
+#     inp = torch.from_numpy(inp_np.transpose(0, 3, 1, 2)).float().to(DEVICE)
+#     with torch.no_grad():
+#         logits, _ = imp_model(inp)
+#     mask = (torch.sigmoid(logits)[0, 0].cpu().numpy() > 0.5).astype(np.uint8) * 255
+#     mask_img = cv2.resize(mask, (orig.shape[1], orig.shape[0]), cv2.INTER_NEAREST)
+#     extracted = cv2.bitwise_and(orig, orig, mask=mask_img)
+#     return StreamingResponse(encode_image(extracted), media_type="image/png")
+#
+#
+# @app.post("/separate/clean")
+# async def clean(file: UploadFile = File(...), preserve_colors: bool = Query(False, description="Сохранять оригинальные цвета фона")):
+#     if imp_model is None:
+#         raise HTTPException(404, "Improved model not available")
+#
+#     img_bytes = await file.read()
+#     orig, inp_np, (H, W) = preprocess(img_bytes)
+#     orig = cv2.resize(orig, (512, 512))
+#     inp = torch.from_numpy(inp_np.transpose(0, 3, 1, 2)).float().to(DEVICE)
+#
+#     with torch.no_grad():
+#         logits, clean_pred = imp_model(inp)
+#
+#     if preserve_colors:
+#         comp_np = composite_clean_preserve_colors(orig, logits, clean_pred)
+#     else:
+#         comp_np = composite_clean(orig, logits, clean_pred)
+#
+#     buf = io.BytesIO()
+#     Image.fromarray(comp_np).resize((W, H), Image.BILINEAR).save(buf, "PNG")
+#     buf.seek(0)
+#
+#     return StreamingResponse(buf, media_type="image/png")
